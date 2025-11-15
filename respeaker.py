@@ -37,17 +37,23 @@ def extract_embedding(audio):
 
 
 # --- 4. Build database of embeddings ---
-def build_database(folder="samples"):
+def build_database_from_folders(base_folder="samples"):
     db = {}
-    for file in os.listdir(folder):
-        path = os.path.join(folder, file)
-        if not file.lower().endswith((".wav", ".mp3", ".m4a", ".flac", ".ogg")):
+    for cmd_folder in os.listdir(base_folder):
+        cmd_path = os.path.join(base_folder, cmd_folder)
+        if not os.path.isdir(cmd_path):
             continue
 
-        audio, sr = load_audio_any_format(path)
-        emb = extract_embedding(audio)
-        db[file[:-4]] = emb
+        db[cmd_folder] = []
 
+        for file in os.listdir(cmd_path):
+            file_path = os.path.join(cmd_path, file)
+            try:
+                audio, sr = load_audio_any_format(file_path)
+                emb = extract_embedding(audio)
+                db[cmd_folder].append(emb)
+            except Exception as e:
+                print(f"Failed to process {file_path}: {e}")
     return db
 
 # --- 5.record from mic

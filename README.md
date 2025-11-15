@@ -2,4 +2,4 @@
 
 ## To run app
 activate env: `.\venv\Scripts\Activate.ps1` <br>
-run app: `python respeaker.py`
+run app: `python app.py`
