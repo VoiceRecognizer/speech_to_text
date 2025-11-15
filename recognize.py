@@ -100,26 +100,6 @@ def whisper_recognize(audio):
     return text
 
 # ===============================
-# Phoneme helpers
-# ===============================
-def approx_phonemes_from_text(text):
-    mapping = {
-        "a": "AH", "e": "EH", "i": "IH", "o": "OW", "u": "UH",
-        "n": "N", "m": "M", "f": "F", "s": "S", "c": "K"
-    }
-    text = text.lower()
-    phones = [mapping.get(c, c.upper()) for c in text if c.isalpha()]
-    return " ".join(phones)
-
-def phoneme_similarity_custom(input_text, command_phonemes):
-    input_phones = approx_phonemes_from_text(input_text)
-    set_input = set(input_phones.split())
-    set_cmd = set(command_phonemes.split())
-    if not set_input or not set_cmd:
-        return 0
-    return len(set_input & set_cmd) / max(len(set_input), len(set_cmd))
-
-# ===============================
 # Prepare sample MFCC (dynamic expansion)
 # ===============================
 def prepare_sample_mfcc(sample):
@@ -171,21 +151,6 @@ def recognize(audio=None):
     if best_score - second_best > 0.05 and best_score >= THRESHOLD:
         print(f"✅ DTW recognized: {best_match} (Confidence: {best_score:.2f})")
         return best_match
-
-    # --- Step 3: Phoneme fallback ---
-    print("🤔 DTW uncertain — using phoneme similarity...")
-    phoneme_best = None
-    phoneme_score = 0
-    for cmd, data in commands.items():
-        cmd_phones = data.get("phonemes", "")
-        sim = phoneme_similarity_custom(recognized_text, cmd_phones)
-        if sim > phoneme_score:
-            phoneme_score = sim
-            phoneme_best = cmd
-
-    if phoneme_score >= 0.5:
-        print(f"✅ Phoneme recognized: {phoneme_best} (Similarity: {phoneme_score:.2f})")
-        return phoneme_best
 
     print(f"❌ Command not recognized.")
     return None

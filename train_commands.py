@@ -5,7 +5,7 @@ import json
 import os
 import pronouncing
 
-COMMANDS = ["yes", "no", "fuck", "coming"]
+COMMANDS = ["yes", "no"]
 SAMPLE_RATE = 16000
 DURATION = 2 
 COMMANDS_FILE = "commands.json"
