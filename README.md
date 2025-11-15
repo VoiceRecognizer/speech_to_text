@@ -2,4 +2,5 @@
 `.\venv\Scripts\Activate.ps1`
 
 ## To run app
-`streamlit run respeaker.py`
+activate env: `.\venv\Scripts\Activate.ps1`
+run app: `streamlit run respeaker.py`
