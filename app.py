@@ -9,16 +9,46 @@ from pathlib import Path
 import tensorflow as tf
 import tensorflow_hub as hub
 from pydub import AudioSegment
+import io
+import base64
+
+# ---------------- MARKDOWN -------------
+st.markdown("""
+<style>
+button[data-baseweb="button"] {
+    font-size: 32px;
+    padding: 30px 60px;
+    border-radius: 20px;
+    font-weight: bold;
+}
+button[data-baseweb="button"]:nth-of-type(1) { 
+    background-color:#16a34a; color:white; 
+}
+button[data-baseweb="button"]:nth-of-type(2) { 
+    background-color:#dc2626; color:white; 
+}
+</style>
+""", unsafe_allow_html=True)
 
 # ---------------- CONFIG ----------------
 SAMPLE_RATE = 16000
 DURATION = 4
 SAMPLES_FOLDER = "samples" 
 
+# ---------------- CACHING ----------------
+@st.cache_resource
+def load_yamnet():
+    return hub.load("https://tfhub.dev/google/yamnet/1")
+
+@st.cache_resource
+def load_database():
+    return build_database_from_folders(SAMPLES_FOLDER)
+
+
 # ---------------- Load YAMNet ----------------
-st.info("Loading YAMNet model...")
-yamnet_model = hub.load("https://tfhub.dev/google/yamnet/1")
-st.success("YAMNet loaded!")
+print("Loading YAMNet model...")
+yamnet_model = load_yamnet()
+print("YAMNet loaded!")
 
 # ---------------- Helpers ----------------
 def load_audio_any_format(path, target_sr=SAMPLE_RATE):
@@ -32,7 +62,8 @@ def load_audio_any_format(path, target_sr=SAMPLE_RATE):
 def extract_embedding(audio):
     audio_tensor = tf.convert_to_tensor(audio, dtype=tf.float32)
     _, embeddings, _ = yamnet_model(audio_tensor)
-    return tf.reduce_mean(embeddings, axis=0).numpy()
+    emb = tf.reduce_mean(embeddings, axis=0).numpy()
+    return emb / np.linalg.norm(emb)
 
 def build_database_from_folders(base_folder=SAMPLES_FOLDER):
     db = {}
@@ -57,14 +88,16 @@ def average_embedding(samples):
 def identify_command(mic_emb, db):
     best_cmd = None
     best_score = 999
+
     for cmd, samples in db.items():
-        if len(samples) == 0:
-            continue
-        avg_emb = average_embedding(samples)
-        score = cosine(mic_emb, avg_emb)
+        # compute distance to each sample
+        distances = [cosine(mic_emb, s) for s in samples]
+        score = np.mean(sorted(distances)[:3])  # average of 3 closest
+
         if score < best_score:
             best_score = score
             best_cmd = cmd
+    
     return best_cmd, best_score
 
 def record_from_mic(seconds=DURATION, sr=SAMPLE_RATE):
@@ -75,15 +108,31 @@ def record_from_mic(seconds=DURATION, sr=SAMPLE_RATE):
     return audio.flatten()
 
 # ---------------- Build database ----------------
-st.info("Building command database from files...")
-database = build_database_from_folders(SAMPLES_FOLDER)
-st.success(f"Database loaded with {len(database)} commands!")
+print("Building command database from files...")
+database = load_database()
+print(f"Database loaded with {len(database)} commands!")
 
 # ---------------- Streamlit UI ----------------
 st.title("🎤 Voice Command Interface")
 st.markdown(f"**Known commands:** {', '.join(database.keys())}")
 st.write("Click the button and speak your command!")
 
+# Function to play audio immediately using gTTS
+def play_audio(text):
+    tts = gTTS(text)
+    mp3_fp = io.BytesIO()
+    tts.write_to_fp(mp3_fp)
+    mp3_fp.seek(0)
+    b64 = base64.b64encode(mp3_fp.read()).decode()
+    audio_html = f"""
+    <audio autoplay>
+        <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
+    </audio>
+    """
+    st.markdown(audio_html, unsafe_allow_html=True)
+    print(f"Spoken: {text}")  # log to terminal
+
+# ---------------- Voice recognition button ----------------
 if st.button("Start Listening"):
     audio = record_from_mic()
     mic_emb = extract_embedding(audio)
@@ -91,12 +140,17 @@ if st.button("Start Listening"):
 
     if command:
         st.write(f"✅ Recognized command: **{command}** (distance: {distance:.4f})")
-        # Text-to-speech via gTTS
-        tts = gTTS(command)
-        tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3")
-        tts.save(tmp_file.name)
-        st.audio(tmp_file.name, format="audio/mp3")
-        tmp_file.close()
-        os.unlink(tmp_file.name)
+        play_audio(command)
     else:
         st.write("❌ Command not recognized.")
+
+# ---------------- Yes/No buttons ----------------
+st.markdown("### Quick Responses")
+col1, col2 = st.columns(2)
+with col1:
+    if st.button("Yes"):
+        play_audio("Yes")
+with col2:
+    if st.button("No"):
+        play_audio("No")
+
